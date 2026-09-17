@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block title %}Visual Search - AI Inventory System{% endblock %}
+{% block page_title %}Visual Product Recognition{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Live Camera Feed & YOLOv4 Detection</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <div id="cameraContainer">
+                        <video id="cameraFeed" autoplay playsinline style="max-width: 100%; border: 2px solid #dee2e6; border-radius: 8px;"></video>
+                        <canvas id="detectionCanvas" style="display: none;"></canvas>
+                    </div>
+                    <div id="annotatedImage" class="mt-3"></div>
+                    
+                    <div class="mt-3">
+                        <button id="startCamera" class="btn btn-primary me-2">
+                            <i class="fas fa-camera me-1"></i>Start Camera
+                        </button>
+                        <button id="stopCamera" class="btn btn-secondary me-2" disabled>
+                            <i class="fas fa-stop me-1"></i>Stop Camera
+                        </button>
+                        <button id="captureFrame" class="btn btn-success" disabled>
+                            <i class="fas fa-camera-retro me-1"></i>Capture & Detect
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>YOLOv4 Real-time Detection Active</strong><br>
+                    • Confidence threshold: 70%<br>
+                    • Processing: 30 FPS optimized<br>
+                    • Classes: Retail products (bottles, fruits, books, etc.)
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Detection Results</h5>
+            </div>
+            <div class="card-body">
+                <div id="detectionResults">
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-search fa-2x mb-2"></i>
+                        <p>No products detected yet</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Upload Image for Detection</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <input type="file" class="form-control" id="imageUpload" accept="image/*">
+                </div>
+                <button class="btn btn-outline-primary w-100" onclick="processUploadedImage()">
+                    <i class="fas fa-upload me-1"></i>Process with YOLOv4
+                </button>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Detection Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div id="detectionStats">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h5 id="totalDetections">0</h5>
+                            <small class="text-muted">Total Detections</small>
+                        </div>
+                        <div class="col-6">
+                            <h5 id="matchedProducts">0</h5>
+                            <small class="text-muted">Matched Products</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Recently Identified Products</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Detected Object</th>
+                                <th>Confidence</th>
+                                <th>Timestamp</th>
+                                <th>Current Stock</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentDetections">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">No recent detections</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let cameraStream = null;
+let detectionInterval = null;
+const socket = io();
+
+// Camera control functions
+document.getElementById('startCamera').addEventListener('click', async function() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { width: 640, height: 480 } 
+        });
+        
+        const video = document.getElementById('cameraFeed');
+        video.srcObject = stream;
+        cameraStream = stream;
+        
+        document.getElementById('startCamera').disabled = true;
+        document.getElementById('stopCamera').disabled = false;
+        document.getElementById('captureFrame').disabled = false;
+        
+        // Start periodic detection
+        detectionInterval = setInterval(captureAndDetect, 3000); // Detect every 3 seconds
+        
+    } catch (error) {
+        alert('Error accessing camera: ' + error.message);
+    }
+});
+
+document.getElementById('stopCamera').addEventListener('click', function() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+    }
+    
+    if (detectionInterval) {
+        clearInterval(detectionInterval);
+        detectionInterval = null;
+    }
+    
+    document.getElementById('startCamera').disabled = false;
+    document.getElementById('stopCamera').disabled = true;
+    document.getElementById('captureFrame').disabled = true;
+    
+    const video = document.getElementById('cameraFeed');
+    video.srcObject = null;
+});
+
+document.getElementById('captureFrame').addEventListener('click', captureAndDetect);
+
+async function captureAndDetect() {
+    const video = document.getElementById('cameraFeed');
+    const canvas = document.getElementById('detectionCanvas');
+    const context = canvas.getContext('2d');
+    
+    if (!video.srcObject) return;
+    
+    // Set canvas dimensions to match video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Draw current video frame to canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Convert canvas to base64
+    const imageData = canvas.toDataURL('image/jpeg');
+    
+    try {
+        const response = await fetch('/api/capture_from_camera', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                image_data: imageData
+            })
+        });
+        
+        const result = await response.json();
+        updateDetectionResults(result);
+        
+    } catch (error) {
+        console.error('Detection error:', error);
+    }
+}
+
+function updateDetectionResults(result) {
+    const detectionResults = document.getElementById('detectionResults');
+    const recentDetections = document.getElementById('recentDetections');
+    const totalDetections = document.getElementById('totalDetections');
+    const matchedProducts = document.getElementById('matchedProducts');
+    const annotatedImage = document.getElementById('annotatedImage');
+    
+    if (result.success) {
+        // Update statistics
+        totalDetections.textContent = result.total_detections || 0;
+        matchedProducts.textContent = result.matched_products ? result.matched_products.length : 0;
+        
+        // Show annotated image if available
+        if (result.annotated_image) {
+            annotatedImage.innerHTML = `
+                <h6>Annotated Detection:</h6>
+                <img src="${result.annotated_image}" class="img-fluid rounded" alt="Detection Result">
+            `;
+        }
+        
+        // Update detection results
+        if (result.matched_products && result.matched_products.length > 0) {
+            let resultsHTML = '';
+            result.matched_products.forEach(product => {
+                resultsHTML += `
+                    <div class="alert alert-success mb-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6><i class="fas fa-check-circle me-2"></i>${product.name}</h6>
+                                <p class="mb-1">Detected: ${product.detection_confidence ? (product.detection_confidence * 100).toFixed(1) + '%' : 'N/A'}</p>
+                                <p class="mb-0">Stock: ${product.current_stock} units</p>
+                            </div>
+                            <span class="badge bg-success">Matched</span>
+                        </div>
+                    </div>
+                `;
+            });
+            detectionResults.innerHTML = resultsHTML;
+            
+            // Update recent detections table
+            if (recentDetections.querySelector('.text-muted')) {
+                recentDetections.innerHTML = '';
+            }
+            
+            result.matched_products.forEach(product => {
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = `
+                    <td>${product.name}</td>
+                    <td>${product.detection_confidence ? (product.detection_confidence * 100).toFixed(1) + '%' : 'N/A'}</td>
+                    <td>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar" style="width: ${(product.detection_confidence || 0) * 100}%"></div>
+                        </div>
+                        <small>${(product.detection_confidence || 0) * 100}%</small>
+                    </td>
+                    <td>${new Date().toLocaleTimeString()}</td>
+                    <td>${product.current_stock}</td>
+                    <td><span class="badge bg-success">Identified</span></td>
+                `;
+                recentDetections.prepend(newRow);
+            });
+        } else if (result.detections && result.detections.length > 0) {
+            detectionResults.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Objects detected but not matched with inventory. Consider adding these products.
+                </div>
+            `;
+        } else {
+            detectionResults.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No products detected in the current frame.
+                </div>
+            `;
+        }
+    } else {
+        detectionResults.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-times-circle me-2"></i>
+                Detection failed: ${result.error}
+            </div>
+        `;
+    }
+}
+
+function processUploadedImage() {
+    const fileInput = document.getElementById('imageUpload');
+    if (!fileInput.files[0]) {
+        alert('Please select an image first');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('image', fileInput.files[0]);
+    
+    const detectionResults = document.getElementById('detectionResults');
+    detectionResults.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-3" role="status"></div>
+            <p>Processing image with YOLOv4...</p>
+        </div>
+    `;
+    
+    fetch('/api/detect_products', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(result => {
+        updateDetectionResults(result);
+    })
+    .catch(error => {
+        detectionResults.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-times-circle me-2"></i>
+                Error: ${error.message}
+            </div>
+        `;
+    });
+}
+
+// Real-time detection updates
+socket.on('detection_results', function(data) {
+    updateDetectionResults(data);
+});
+</script>
+{% endblock %}

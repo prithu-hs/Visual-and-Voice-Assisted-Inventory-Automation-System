@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+
+{% block title %}Voice Control - AI Inventory System{% endblock %}
+{% block page_title %}Voice-Controlled Inventory{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Voice Command Interface</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <div id="voiceStatus" class="mb-3">
+                        <div class="voice-visualizer">
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                        </div>
+                        <div id="listeningStatus" class="text-muted small mt-2">Ready to listen</div>
+                    </div>
+                    
+                    <button id="startListening" class="btn btn-success btn-lg rounded-circle p-4">
+                        <i class="fas fa-microphone fa-2x"></i>
+                    </button>
+                    <button id="stopListening" class="btn btn-danger btn-lg rounded-circle p-4" style="display: none;">
+                        <i class="fas fa-stop fa-2x"></i>
+                    </button>
+                    
+                    <div class="mt-3">
+                        <small class="text-muted" id="instructionText">Click the microphone and speak your command</small>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Or type your command:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="textCommand" 
+                               placeholder="e.g., 'add 10 apples to stock'">
+                        <button class="btn btn-primary" onclick="processTextCommand()">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Google Speech Recognition Active</strong><br>
+                    • Language: English<br>
+                    • Noise cancellation: Enabled<br>
+                    • Retail vocabulary: Optimized
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Available Voice Commands</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Stock Management</h6>
+                        <ul class="small">
+                            <li>"Add 10 apples to stock"</li>
+                            <li>"Remove 5 bananas"</li>
+                            <li>"Restock milk with 20 units"</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Inventory Queries</h6>
+                        <ul class="small">
+                            <li>"Check stock of bread"</li>
+                            <li>"Show low stock items"</li>
+                            <li>"Inventory summary"</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Command Results & Responses</h5>
+            </div>
+            <div class="card-body">
+                <div id="commandResults" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-comments fa-2x mb-2"></i>
+                        <p>No commands processed yet</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Recent Voice Commands</h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearRecentCommands()">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="recentCommands" style="max-height: 200px; overflow-y: auto;">
+                    <div class="text-center text-muted py-2">
+                        <small>No recent commands</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Voice Control Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="textToSpeechSwitch" checked>
+                    <label class="form-check-label" for="textToSpeechSwitch">
+                        Enable Text-to-Speech Responses
+                    </label>
+                </div>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="autoListenSwitch">
+                    <label class="form-check-label" for="autoListenSwitch">
+                        Auto-start listening on page load
+                    </label>
+                </div>
+                <button class="btn btn-outline-primary w-100" onclick="testMicrophone()">
+                    <i class="fas fa-microphone-alt me-1"></i>Test Microphone
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.voice-visualizer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 50px;
+}
+
+.voice-visualizer .bar {
+    width: 6px;
+    height: 10px;
+    background: #dee2e6;
+    border-radius: 3px;
+    transition: height 0.2s ease;
+}
+
+.listening .voice-visualizer .bar {
+    background: #28a745;
+    animation: pulse 0.8s infinite;
+}
+
+.listening .voice-visualizer .bar:nth-child(1) { animation-delay: 0.1s; }
+.listening .voice-visualizer .bar:nth-child(2) { animation-delay: 0.2s; }
+.listening .voice-visualizer .bar:nth-child(3) { animation-delay: 0.3s; }
+.listening .voice-visualizer .bar:nth-child(4) { animation-delay: 0.4s; }
+.listening .voice-visualizer .bar:nth-child(5) { animation-delay: 0.5s; }
+
+@keyframes pulse {
+    0%, 100% { height: 10px; }
+    50% { height: 30px; }
+}
+
+.command-bubble {
+    max-width: 80%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.command-user {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    margin-left: auto;
+}
+
+.command-system {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #333;
+}
+
+.command-error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let isListening = false;
+const socket = io();
+
+document.getElementById('startListening').addEventListener('click', function() {
+    startVoiceRecognition();
+});
+
+document.getElementById('stopListening').addEventListener('click', function() {
+    stopVoiceRecognition();
+});
+
+function startVoiceRecognition() {
+    if (isListening) return;
+    
+    fetch('/api/start_voice_listening', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            isListening = true;
+            document.getElementById('voiceStatus').classList.add('listening');
+            document.getElementById('startListening').style.display = 'none';
+            document.getElementById('stopListening').style.display = 'inline-block';
+            document.getElementById('listeningStatus').textContent = 'Listening... Speak now';
+            document.getElementById('listeningStatus').className = 'text-success small mt-2';
+            document.getElementById('instructionText').textContent = 'Speak your command clearly into the microphone';
+            
+            addCommandToResults('Voice recognition started. Please speak your command.', 'system');
+        } else {
+            alert('Error starting voice recognition: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error starting voice recognition: ' + error.message);
+    });
+}
+
+function stopVoiceRecognition() {
+    if (!isListening) return;
+    
+    fetch('/api/stop_voice_listening', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        isListening = false;
+        document.getElementById('voiceStatus').classList.remove('listening');
+        document.getElementById('startListening').style.display = 'inline-block';
+        document.getElementById('stopListening').style.display = 'none';
+        document.getElementById('listeningStatus').textContent = 'Ready to listen';
+        document.getElementById('listeningStatus').className = 'text-muted small mt-2';
+        document.getElementById('instructionText').textContent = 'Click the microphone and speak your command';
+        
+        addCommandToResults('Voice recognition stopped.', 'system');
+    })
+    .catch(error => {
+        console.error('Error stopping voice recognition:', error);
+    });
+}
+
+function processTextCommand() {
+    const command = document.getElementById('textCommand').value.trim();
+    if (command) {
+        processVoiceCommand(command);
+        document.getElementById('textCommand').value = '';
+    } else {
+        alert('Please enter a command');
+    }
+}
+
+function processVoiceCommand(command) {
+    // Display user command
+    addCommandToResults(command, 'user');
+    
+    // Send to backend
+    fetch('/api/process_voice_command', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            command: command
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        const messageType = data.success ? 'system' : 'error';
+        addCommandToResults(data.message, messageType, data.success);
+        addToRecentCommands(command, data.message, data.success);
+    })
+    .catch(error => {
+        addCommandToResults('Error processing command: ' + error.message, 'error', false);
+    });
+}
+
+function addCommandToResults(message, type, success = true) {
+    const results = document.getElementById('commandResults');
+    
+    // Remove placeholder if it exists
+    if (results.querySelector('.text-muted')) {
+        results.innerHTML = '';
+    }
+    
+    const bubble = document.createElement('div');
+    bubble.className = `command-bubble command-${type}`;
+    
+    if (type === 'system') {
+        bubble.innerHTML = `
+            <div class="d-flex align-items-start">
+                <i class="fas fa-robot me-2 mt-1 text-primary"></i>
+                <div class="flex-grow-1">
+                    <small class="text-muted">AI Assistant</small>
+                    <div>${message}</div>
+                </div>
+                <i class="fas fa-check-circle text-success ms-2 mt-1"></i>
+            </div>
+        `;
+    } else if (type === 'error') {
+        bubble.innerHTML = `
+            <div class="d-flex align-items-start">
+                <i class="fas fa-exclamation-triangle me-2 mt-1 text-danger"></i>
+                <div class="flex-grow-1">
+                    <small class="text-muted">System Error</small>
+                    <div>${message}</div>
+                </div>
+            </div>
+        `;
+    } else {
+        bubble.innerHTML = `
+            <div class="d-flex align-items-start justify-content-end">
+                <div class="text-end flex-grow-1">
+                    <small class="text-muted">You</small>
+                    <div>${message}</div>
+                </div>
+                <i class="fas fa-user ms-2 mt-1 text-muted"></i>
+            </div>
+        `;
+    }
+    
+    results.appendChild(bubble);
+    results.scrollTop = results.scrollHeight;
+}
+
+function addToRecentCommands(command, response, success) {
+    const recentCommands = document.getElementById('recentCommands');
+    
+    // Remove placeholder if it exists
+    if (recentCommands.querySelector('.text-muted')) {
+        recentCommands.innerHTML = '';
+    }
+    
+    const commandElement = document.createElement('div');
+    commandElement.className = `border-bottom pb-2 mb-2 ${success ? '' : 'border-danger'}`;
+    commandElement.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start">
+            <div class="flex-grow-1">
+                <strong class="small">"${command}"</strong>
+                <div class="text-muted small">${response.length > 50 ? response.substring(0, 50) + '...' : response}</div>
+            </div>
+            <span class="badge ${success ? 'bg-success' : 'bg-danger'} ms-2">
+                ${success ? '✓' : '✗'}
+            </span>
+        </div>
+        <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+    `;
+    
+    recentCommands.prepend(commandElement);
+    
+    // Limit to 10 recent commands
+    if (recentCommands.children.length > 10) {
+        recentCommands.removeChild(recentCommands.lastChild);
+    }
+}
+
+function clearRecentCommands() {
+    const recentCommands = document.getElementById('recentCommands');
+    recentCommands.innerHTML = '<div class="text-center text-muted py-2"><small>No recent commands</small></div>';
+}
+
+function testMicrophone() {
+    addCommandToResults('Testing microphone... Please allow microphone access and speak.', 'system');
+    
+    // This is a simplified test - in production, you'd want more robust testing
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(function(stream) {
+                addCommandToResults('Microphone test successful! Your microphone is working properly.', 'system');
+                stream.getTracks().forEach(track => track.stop());
+            })
+            .catch(function(error) {
+                addCommandToResults('Microphone test failed: ' + error.message, 'error');
+            });
+    } else {
+        addCommandToResults('Microphone access not supported in this browser.', 'error');
+    }
+}
+
+// Handle real-time voice input from server
+socket.on('voice_input', function(data) {
+    if (data.success && data.text && !data.text.toLowerCase().includes('could not')) {
+        addCommandToResults(data.text, 'user');
+    }
+});
+
+socket.on('voice_command_response', function(data) {
+    const messageType = data.success ? 'system' : 'error';
+    addCommandToResults(data.message, messageType, data.success);
+});
+
+// Allow pressing Enter in text command input
+document.getElementById('textCommand').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        processTextCommand();
+    }
+});
+
+// Auto-start listening if enabled
+document.addEventListener('DOMContentLoaded', function() {
+    const autoListen = document.getElementById('autoListenSwitch');
+    if (autoListen && autoListen.checked) {
+        setTimeout(startVoiceRecognition, 1000);
+    }
+});
+</script>
+{% endblock %}

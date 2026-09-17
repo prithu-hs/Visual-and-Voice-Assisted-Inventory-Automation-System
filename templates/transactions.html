@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Transactions - AI Inventory System{% endblock %}
+{% block page_title %}Transaction History{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">All Transactions</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Product</th>
+                        <th>Transaction Type</th>
+                        <th>Quantity</th>
+                        <th>Stock Change</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td>{{ transaction.timestamp }}</td>
+                        <td>{{ transaction.product_name }}</td>
+                        <td>
+                            <span class="badge 
+                                {% if transaction.transaction_type == 'sale' %}bg-success
+                                {% elif transaction.transaction_type == 'restock' %}bg-primary
+                                {% else %}bg-warning{% endif %}">
+                                {{ transaction.transaction_type|title }}
+                            </span>
+                        </td>
+                        <td class="fw-bold {% if transaction.transaction_type == 'sale' %}text-danger{% else %}text-success{% endif %}">
+                            {% if transaction.transaction_type == 'sale' %}-{% else %}+{% endif %}{{ transaction.quantity }}
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ transaction.previous_stock }} → {{ transaction.new_stock }}</small>
+                        </td>
+                        <td>{{ transaction.notes or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

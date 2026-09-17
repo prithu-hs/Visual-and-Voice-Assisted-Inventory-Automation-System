@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}User Dashboard{% endblock %}
+{% block page_title %}Welcome, {{ username }}{% endblock %}
+{% block content %}
+<div class="row">
+  {% for product in products %}
+  <div class="col-md-4 mb-4">
+    <div class="card h-100">
+      <img src="/static/uploads/{{ product.image_path }}" class="card-img-top" alt="{{ product.name }}">
+      <div class="card-body">
+        <h5 class="card-title">{{ product.name }}</h5>
+        <p class="card-text">{{ product.description }}</p>
+        <p><strong>₹{{ product.price }}</strong></p>
+        <button class="btn btn-success w-100" onclick="buyProduct('{{ product.name }}')">Buy Now</button>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<script>
+function buyProduct(productName) {
+  fetch('/api/process_voice_command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command: `buy 1 ₹{productName}` })
+  })
+  .then(res => res.json())
+  .then(data => alert(data.message))
+  .catch(err => alert('Error: ' + err.message));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<div class="container mt-5" style="max-width: 500px;">
+  <h3 class="mb-3 text-center">User Registration</h3>
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+  <form method="post">
+    <div class="mb-3">
+      <label>Username</label>
+      <input type="text" name="username" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label>Email</label>
+      <input type="email" name="email" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label>Password</label>
+      <input type="password" name="password" class="form-control" required>
+    </div>
+    <button class="btn btn-primary w-100">Register</button>
+    <p class="text-center mt-3">Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
+  </form>
+</div>
+{% endblock %}

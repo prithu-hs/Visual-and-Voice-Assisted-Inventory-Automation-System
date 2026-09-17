@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}My Orders{% endblock %}
+{% block page_title %}My Orders{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Purchase History</h5>
+        <div>
+            <button class="btn btn-light btn-sm" onclick="downloadAllBills()">
+                <i class="fas fa-download me-1"></i>Download All Bills
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if orders %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Unit Price</th>
+                            <th>Total Price</th>
+                            <th>Order Time</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr>
+                            <td>#{{ order.id }}</td>
+                            <td>
+                                <img src="/static/uploads/{{ order.image_path }}" alt="{{ order.product_name }}"
+                                     width="50" height="50" class="rounded me-2">
+                                {{ order.product_name }}
+                            </td>
+                            <td>{{ order.quantity }}</td>
+                            <td>₹{{ "%.2f"|format(order.total_price / order.quantity) if order.quantity > 0 else 0 }}</td>
+                            <td>₹{{ "%.2f"|format(order.total_price) }}</td>
+                            <td>{{ order.order_time }}</td>
+                            <td>
+                                <button class="btn btn-primary btn-sm" onclick="downloadBill({{ order.id }})">
+                                    <i class="fas fa-download me-1"></i>Bill
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-box-open fa-3x mb-2"></i>
+                <p>No orders found yet. Start shopping from your dashboard!</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadBill(orderId) {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Generating...';
+    button.disabled = true;
+
+    // Download the bill
+    window.open(`/download_bill/${orderId}`, '_blank');
+    
+    // Reset button after a short delay
+    setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }, 2000);
+}
+
+function downloadAllBills() {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Generating All...';
+    button.disabled = true;
+
+    // Download all bills
+    window.open('/download_all_bills', '_blank');
+    
+    // Reset button after a short delay
+    setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }, 3000);
+}
+
+// Auto-download bill after purchase if parameter is present
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const newOrder = urlParams.get('new_order');
+    
+    if (newOrder) {
+        // Find the latest order and auto-download its bill
+        const rows = document.querySelectorAll('tbody tr');
+        if (rows.length > 0) {
+            const firstRow = rows[0];
+            const orderId = firstRow.querySelector('td:first-child').textContent.replace('#', '');
+            setTimeout(() => {
+                downloadBill(orderId);
+            }, 1000);
+        }
+    }
+});
+</script>
+{% endblock %}

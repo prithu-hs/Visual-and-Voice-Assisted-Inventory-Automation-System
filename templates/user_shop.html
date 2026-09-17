@@ -1,0 +1,737 @@
+{% extends "base.html" %}
+{% block title %}Smart Shop{% endblock %}
+{% block page_title %}Multi-Product Voice + Vision Smart Shop{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">🛒 Smart Camera Shop</h5>
+                <div id="cartSummary" class="text-white">
+                    <small>Cart: <span id="cartCount">0</span> items | ₹<span id="cartTotal">0.00</span></small>
+                </div>
+            </div>
+            <div class="card-body text-center">
+                <div id="sessionStatus" class="alert alert-info">
+                    <i class="fas fa-spinner fa-spin"></i> Initializing shopping session...
+                </div>
+                
+                <video id="cameraFeed" autoplay playsinline width="480" height="360" class="border rounded" style="display: none;"></video>
+                <br>
+                <div class="mt-3">
+                    <button class="btn btn-primary me-2" onclick="startDetection()" id="startBtn" disabled>
+                        <i class="fas fa-camera me-1"></i>Start Shopping
+                    </button>
+                    <button class="btn btn-success me-2" onclick="viewCart()" id="viewCartBtn" disabled>
+                        <i class="fas fa-shopping-cart me-1"></i>View Cart (<span id="cartCountBtn">0</span>)
+                    </button>
+                    <button class="btn btn-warning" onclick="checkout()" id="checkoutPageBtn" disabled>
+                        <i class="fas fa-credit-card me-1"></i>Checkout
+                    </button>
+                    <!-- Add Voice Control Button -->
+                    <button class="btn btn-info" onclick="startVoiceControl()" id="voiceControlBtn">
+                        <i class="fas fa-microphone me-1"></i>Voice Control
+                    </button>
+                </div>
+                <div id="result" class="mt-3"></div>
+                
+                <!-- Voice Status Display -->
+                <div id="voiceStatus" class="mt-3" style="display: none;">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-microphone"></i> 
+                        <span id="voiceStatusText">Listening for voice commands...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Shopping Cart</h5>
+            </div>
+            <div class="card-body">
+                <div id="cartItems" style="max-height: 300px; overflow-y: auto;">
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                        <p>Your cart is empty</p>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between">
+                        <strong>Total:</strong>
+                        <strong id="cartTotalSide">₹0.00</strong>
+                    </div>
+                    <button class="btn btn-success w-100 mt-2" onclick="checkout()" disabled id="checkoutBtn">
+                        <i class="fas fa-credit-card me-1"></i>Checkout
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Quick Voice Commands</h5>
+            </div>
+            <div class="card-body">
+                <div class="small">
+                    <p><strong>During detection:</strong></p>
+                    <ul class="list-unstyled">
+                        <li>🎯 "Add to cart" - Add detected product</li>
+                        <li>🎯 "Add 2 to cart" - Add specific quantity</li>
+                        <li>🎯 "Add 5 apples" - Add specific product and quantity</li>
+                        <li>🎯 "Checkout" - Complete purchase</li>
+                        <li>🎯 "View cart" - Show cart items</li>
+                        <li>🎯 "Remove item" - Remove from cart</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Manual Add to Cart Form -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Manual Add to Cart</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Product Name</label>
+                    <input type="text" class="form-control" id="manualProductName" placeholder="e.g., Apple, Banana">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Quantity</label>
+                    <input type="number" class="form-control" id="manualQuantity" value="1" min="1">
+                </div>
+                <button class="btn btn-primary w-100" onclick="manualAddToCart()">
+                    <i class="fas fa-cart-plus me-1"></i>Add to Cart
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cart Modal -->
+<div class="modal fade" id="cartModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Your Shopping Cart</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="cartModalContent">
+                    <!-- Cart content will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Continue Shopping</button>
+                <button type="button" class="btn btn-success" onclick="checkout()">Proceed to Checkout</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let stream;
+let currentSession = null;
+let currentSessionId = null;
+let currentDetectedProduct = null; // Store the last detected product
+let voiceRecognition = null;
+const debugDiv = document.createElement('div');
+debugDiv.style.position = 'fixed';
+debugDiv.style.bottom = '10px';
+debugDiv.style.left = '10px';
+debugDiv.style.padding = '10px 15px';
+debugDiv.style.background = 'rgba(0,0,0,0.6)';
+debugDiv.style.color = 'white';
+debugDiv.style.borderRadius = '8px';
+debugDiv.style.fontSize = '14px';
+debugDiv.style.zIndex = '1000';
+debugDiv.innerText = '🔄 Initializing...';
+document.body.appendChild(debugDiv);
+
+// Initialize shopping session when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeShoppingSession();
+});
+
+function speak(text) {
+    if ('speechSynthesis' in window) {
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.rate = 1;
+        msg.pitch = 1;
+        msg.lang = 'en-US';
+        window.speechSynthesis.speak(msg);
+    }
+}
+
+async function initializeShoppingSession(retryCount = 0) {
+    const maxRetries = 2;
+    
+    try {
+        console.log("🔄 initializeShoppingSession called, attempt:", retryCount + 1);
+        debugDiv.innerText = '🔄 Starting shopping session...';
+        document.getElementById('sessionStatus').innerHTML = 
+            '<i class="fas fa-spinner fa-spin"></i> Initializing shopping session...';
+
+        const response = await fetch('/api/start_shopping_session', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'include'
+        });
+        
+        console.log("Response status:", response.status);
+        
+        let data;
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+            console.log("JSON response data:", data);
+        } else {
+            const text = await response.text();
+            console.error("Non-JSON response received:", text.substring(0, 500));
+            throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
+        }
+        
+        if (data.success) {
+            currentSession = data.session_token;
+            currentSessionId = data.session_id;
+            
+            document.getElementById('sessionStatus').innerHTML = 
+                '<i class="fas fa-check-circle text-success"></i> Shopping session started! You can now start shopping.';
+            
+            // Enable buttons
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('viewCartBtn').disabled = false;
+            document.getElementById('checkoutPageBtn').disabled = false;
+            document.getElementById('voiceControlBtn').disabled = false;
+            
+            debugDiv.innerText = '✅ Session started!';
+            speak("Shopping session started. You can now scan products or use voice commands.");
+            
+            // Load any existing cart items
+            await updateCartDisplay();
+        } else {
+            const errorMsg = data.error || 'Unknown error occurred';
+            console.error("Server returned error:", errorMsg);
+            
+            document.getElementById('sessionStatus').innerHTML = 
+                `<i class="fas fa-exclamation-triangle text-danger"></i> Failed to start shopping session: ${errorMsg}`;
+            debugDiv.innerText = '❌ Session failed: ' + errorMsg;
+            
+            if (retryCount < maxRetries) {
+                console.log(`🔄 Retrying... (${retryCount + 1}/${maxRetries})`);
+                debugDiv.innerText = `🔄 Retrying... (${retryCount + 1}/${maxRetries})`;
+                speak("Having trouble starting session. Retrying...");
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return initializeShoppingSession(retryCount + 1);
+            }
+        }
+    } catch (error) {
+        console.error('❌ initializeShoppingSession error:', error);
+        document.getElementById('sessionStatus').innerHTML = 
+            `<i class="fas fa-exclamation-triangle text-danger"></i> Error: ${error.message}`;
+        debugDiv.innerText = '❌ Error: ' + error.message;
+    }
+}
+
+async function updateCartDisplay() {
+    try {
+        const response = await fetch('/api/get_cart', {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update cart counters
+            document.getElementById('cartCount').textContent = data.items.length;
+            document.getElementById('cartCountBtn').textContent = data.items.length;
+            document.getElementById('cartTotal').textContent = data.total_amount.toFixed(2);
+            document.getElementById('cartTotalSide').textContent = '₹' + data.total_amount.toFixed(2);
+            
+            // Enable/disable checkout button
+            document.getElementById('checkoutBtn').disabled = data.items.length === 0;
+            document.getElementById('checkoutPageBtn').disabled = data.items.length === 0;
+            
+            // Update cart items display
+            const cartItems = document.getElementById('cartItems');
+            if (data.items.length === 0) {
+                cartItems.innerHTML = `
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                        <p>Your cart is empty</p>
+                    </div>
+                `;
+            } else {
+                let cartHTML = '';
+                data.items.forEach(item => {
+                    cartHTML += `
+                        <div class="border-bottom pb-2 mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${item.product_name}</strong>
+                                    <br>
+                                    <small class="text-muted">Qty: ${item.quantity} × ₹${item.unit_price.toFixed(2)}</small>
+                                </div>
+                                <div>
+                                    <strong>₹${item.total_price.toFixed(2)}</strong>
+                                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="removeFromCart(${item.id})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                cartItems.innerHTML = cartHTML;
+            }
+        } else if (data.error === 'No active shopping session') {
+            debugDiv.innerText = '🔄 Session expired, restarting...';
+            await initializeShoppingSession();
+        }
+    } catch (error) {
+        console.error('Failed to update cart:', error);
+    }
+}
+
+async function removeFromCart(itemId) {
+    try {
+        const response = await fetch('/api/remove_from_cart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ item_id: itemId })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            await updateCartDisplay();
+            speak('Item removed from cart');
+            debugDiv.innerText = '✅ Item removed from cart';
+        } else {
+            speak('Failed to remove item from cart');
+            debugDiv.innerText = '❌ Failed to remove item: ' + result.error;
+        }
+    } catch (error) {
+        console.error('Error removing from cart:', error);
+    }
+}
+
+function stopStream() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+    }
+}
+
+async function startDetection() {
+    try {
+        const video = document.getElementById('cameraFeed');
+        video.style.display = 'block';
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        
+        speak("Camera started. Detecting products...");
+        debugDiv.innerText = "🔍 Detecting products...";
+
+        setTimeout(async () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/jpeg');
+
+            const res = await fetch('/api/capture_from_camera', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_data: imageData })
+            });
+            const data = await res.json();
+
+            if (data.success && data.matched_products?.length > 0) {
+                currentDetectedProduct = data.matched_products[0]; // Store the detected product
+                
+                document.getElementById('result').innerHTML = `
+                    <div class="alert alert-success">
+                        <h5>🎯 Product Detected: ${currentDetectedProduct.name}</h5>
+                        <img src="/static/uploads/${currentDetectedProduct.image_path}" width="150" class="rounded shadow mt-2">
+                        <p class="mt-2">Price: ₹${currentDetectedProduct.price} | Stock: ${currentDetectedProduct.current_stock}</p>
+                        <p>Say "<strong>add to cart</strong>" or specify quantity like "<strong>add 2 to cart</strong>"</p>
+                        <div class="mt-2">
+                            <button class="btn btn-success btn-sm" onclick="addDetectedProductToCart(1)">
+                                <i class="fas fa-cart-plus me-1"></i>Add 1 to Cart
+                            </button>
+                            <button class="btn btn-success btn-sm" onclick="addDetectedProductToCart(2)">
+                                <i class="fas fa-cart-plus me-1"></i>Add 2 to Cart
+                            </button>
+                            <button class="btn btn-success btn-sm" onclick="addDetectedProductToCart(5)">
+                                <i class="fas fa-cart-plus me-1"></i>Add 5 to Cart
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                speak(`Detected ${currentDetectedProduct.name}. Price ₹${currentDetectedProduct.price}. Say "add to cart" or use the buttons to continue.`);
+                
+                // Start listening for voice commands
+                startVoiceListening();
+                
+            } else {
+                speak("No known product detected. Please try again.");
+                document.getElementById('result').innerHTML = `
+                    <div class="alert alert-warning">
+                        <h5>No products detected</h5>
+                        <p>Please try again with a different angle or product.</p>
+                    </div>
+                `;
+            }
+        }, 2000);
+    } catch (err) {
+        console.error(err);
+        speak("Error accessing camera.");
+        document.getElementById('result').innerHTML = `
+            <div class="alert alert-danger">
+                <h5>Camera Error</h5>
+                <p>Please allow camera access to use this feature.</p>
+            </div>
+        `;
+    }
+}
+
+// Add detected product to cart
+async function addDetectedProductToCart(quantity = 1) {
+    if (!currentDetectedProduct) {
+        speak("No product detected. Please scan a product first.");
+        return;
+    }
+    
+    await addToCart(currentDetectedProduct, quantity);
+}
+
+// Voice control functions
+function startVoiceControl() {
+    document.getElementById('voiceStatus').style.display = 'block';
+    startVoiceListening();
+}
+
+function startVoiceListening() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        speak("Speech recognition not supported in this browser.");
+        debugDiv.innerText = "❌ Speech recognition not supported";
+        return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    voiceRecognition = new SpeechRecognition();
+    voiceRecognition.continuous = true;
+    voiceRecognition.interimResults = true;
+    voiceRecognition.lang = 'en-US';
+
+    voiceRecognition.onstart = function() {
+        document.getElementById('voiceStatusText').textContent = "🎤 Listening for voice commands...";
+        debugDiv.innerText = "🎤 Voice recognition active";
+        speak("Voice recognition started. You can now say commands like 'add to cart', 'add 5 apples', or 'checkout'.");
+    };
+
+    voiceRecognition.onresult = function(event) {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+            }
+        }
+        
+        if (finalTranscript) {
+            processVoiceCommand(finalTranscript.trim().toLowerCase());
+        }
+    };
+
+    voiceRecognition.onerror = function(event) {
+        console.error('Speech recognition error', event.error);
+        document.getElementById('voiceStatusText').textContent = `❌ Error: ${event.error}`;
+    };
+
+    voiceRecognition.onend = function() {
+        document.getElementById('voiceStatusText').textContent = "🔄 Restarting voice recognition...";
+        setTimeout(() => {
+            if (voiceRecognition) {
+                voiceRecognition.start();
+            }
+        }, 1000);
+    };
+
+    voiceRecognition.start();
+}
+
+function stopVoiceListening() {
+    if (voiceRecognition) {
+        voiceRecognition.stop();
+        voiceRecognition = null;
+        document.getElementById('voiceStatus').style.display = 'none';
+        debugDiv.innerText = "🔇 Voice recognition stopped";
+    }
+}
+
+function processVoiceCommand(command) {
+    console.log("Processing voice command:", command);
+    document.getElementById('voiceStatusText').textContent = `Heard: "${command}"`;
+    debugDiv.innerText = `🎤 Heard: ${command}`;
+
+    // Add to cart commands
+    if (command.includes('add') && (command.includes('cart') || command.includes('to cart'))) {
+        let quantity = 1;
+        const quantityMatch = command.match(/\d+/);
+        if (quantityMatch) {
+            quantity = parseInt(quantityMatch[0]);
+        }
+        
+        if (currentDetectedProduct) {
+            addDetectedProductToCart(quantity);
+        } else {
+            // Try to extract product name from command
+            const productName = extractProductNameFromCommand(command);
+            if (productName) {
+                manualAddToCartWithName(productName, quantity);
+            } else {
+                speak("Please scan a product first or specify the product name.");
+            }
+        }
+    }
+    // Specific product add commands like "add 5 apples"
+    else if (command.includes('add') && command.match(/\d+/)) {
+        const quantityMatch = command.match(/\d+/);
+        const quantity = quantityMatch ? parseInt(quantityMatch[0]) : 1;
+        const productName = extractProductNameFromCommand(command);
+        
+        if (productName) {
+            manualAddToCartWithName(productName, quantity);
+        } else {
+            speak("Please specify which product you want to add.");
+        }
+    }
+    // Checkout commands
+    else if (command.includes('checkout') || command.includes('complete purchase')) {
+        checkout();
+    }
+    // View cart commands
+    else if (command.includes('view cart') || command.includes('show cart')) {
+        viewCart();
+    }
+    // Remove item commands
+    else if (command.includes('remove') && command.includes('cart')) {
+        speak("Please use the remove button in the cart view to remove items.");
+        viewCart();
+    }
+    // Help commands
+    else if (command.includes('help')) {
+        speak("You can say: Add to cart, Add 5 apples, Checkout, View cart, or Remove from cart.");
+    }
+    else {
+        speak("Command not recognized. Say 'help' for available commands.");
+    }
+}
+
+function extractProductNameFromCommand(command) {
+    const products = ['apple', 'banana', 'orange', 'carrot', 'bottle', 'book'];
+    for (const product of products) {
+        if (command.includes(product)) {
+            return product;
+        }
+    }
+    return null;
+}
+
+async function manualAddToCart() {
+    const productName = document.getElementById('manualProductName').value.trim();
+    const quantity = parseInt(document.getElementById('manualQuantity').value) || 1;
+    
+    if (!productName) {
+        alert("Please enter a product name");
+        return;
+    }
+    
+    await manualAddToCartWithName(productName, quantity);
+}
+
+async function manualAddToCartWithName(productName, quantity = 1) {
+    try {
+        const response = await fetch('/api/add_to_cart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                product_name: productName,
+                quantity: quantity
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            speak(`Added ${quantity} ${productName} to cart.`);
+            debugDiv.innerText = `✅ Added ${quantity} ${productName} to cart`;
+            
+            await updateCartDisplay();
+            document.getElementById('manualProductName').value = '';
+        } else {
+            speak(`Failed to add ${productName}: ${result.error}`);
+            debugDiv.innerText = `❌ Failed: ${result.error}`;
+        }
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+        speak('Error adding product to cart.');
+        debugDiv.innerText = '❌ Network error';
+    }
+}
+
+async function addToCart(product, quantity = 1) {
+    try {
+        const response = await fetch('/api/add_to_cart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                product_name: product.name,
+                quantity: quantity
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            speak(`Added ${quantity} ${product.name} to cart. Current total: ₹${result.cart_total.toFixed(2)}`);
+            debugDiv.innerText = `✅ Added to cart: ${quantity} ${product.name}`;
+            
+            await updateCartDisplay();
+            document.getElementById('result').innerHTML = '';
+            
+            // Ask if user wants to continue shopping
+            setTimeout(() => {
+                speak("Do you want to continue shopping? Say 'add to cart' for another product or 'checkout' to complete purchase.");
+            }, 1000);
+        } else {
+            speak(`Failed to add to cart: ${result.error}`);
+            debugDiv.innerText = `❌ Failed: ${result.error}`;
+        }
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+        speak('Error adding product to cart.');
+        debugDiv.innerText = '❌ Network error';
+    }
+}
+
+function viewCart() {
+    const modal = new bootstrap.Modal(document.getElementById('cartModal'));
+    const modalContent = document.getElementById('cartModalContent');
+    
+    fetch('/api/get_cart', { credentials: 'include' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.items.length === 0) {
+                    modalContent.innerHTML = '<p class="text-center text-muted">Your cart is empty</p>';
+                } else {
+                    let cartHTML = '<div class="table-responsive"><table class="table table-striped"><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th><th>Action</th></tr></thead><tbody>';
+                    data.items.forEach(item => {
+                        cartHTML += `
+                            <tr>
+                                <td>${item.product_name}</td>
+                                <td>${item.quantity}</td>
+                                <td>₹${item.unit_price.toFixed(2)}</td>
+                                <td>₹${item.total_price.toFixed(2)}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="removeFromCart(${item.id})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    cartHTML += `</tbody></table></div><div class="text-end"><h5>Total: ₹${data.total_amount.toFixed(2)}</h5></div>`;
+                    modalContent.innerHTML = cartHTML;
+                }
+            } else {
+                modalContent.innerHTML = `<div class="alert alert-danger">Error loading cart: ${data.error}</div>`;
+            }
+        })
+        .catch(error => {
+            modalContent.innerHTML = `<div class="alert alert-danger">Error loading cart: ${error.message}</div>`;
+        });
+    
+    modal.show();
+}
+
+async function checkout() {
+    try {
+        debugDiv.innerText = "🔄 Processing checkout...";
+        speak("Processing your order...");
+        
+        const response = await fetch('/api/complete_purchase', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            speak(`Purchase completed successfully! Total amount: ₹${result.total_amount.toFixed(2)}. Generating your bill now.`);
+            debugDiv.innerText = "✅ Purchase completed!";
+            
+            stopStream();
+            stopVoiceListening();
+            document.getElementById('cameraFeed').style.display = 'none';
+            document.getElementById('voiceStatus').style.display = 'none';
+            
+            setTimeout(() => {
+                generateBill(result.session_id);
+            }, 2000);
+            
+            await updateCartDisplay();
+            
+            document.getElementById('result').innerHTML = `
+                <div class="alert alert-success">
+                    <h5>✅ Purchase Completed!</h5>
+                    <p>Total: ₹${result.total_amount.toFixed(2)}</p>
+                    <p>Your bill is being generated and will download automatically.</p>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                initializeShoppingSession();
+            }, 5000);
+            
+        } else {
+            speak(`Checkout failed: ${result.error}`);
+            debugDiv.innerText = `❌ Checkout failed: ${result.error}`;
+            document.getElementById('result').innerHTML = `
+                <div class="alert alert-danger">
+                    <h5>Checkout Failed</h5>
+                    <p>${result.error}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Checkout error:', error);
+        speak('Error during checkout.');
+        debugDiv.innerText = '❌ Checkout error';
+    }
+}
+
+function generateBill(sessionId) {
+    debugDiv.innerText = "📄 Generating bill...";
+    window.open(`/download_session_bill/${sessionId}`, '_blank');
+    
+    setTimeout(() => {
+        debugDiv.innerText = "✅ Bill generated!";
+        speak("Your bill has been generated and downloaded. Thank you for shopping!");
+    }, 3000);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - AI Inventory System{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ total_products }}</h4>
+                        <p>Total Products</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-boxes fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ low_stock }}</h4>
+                        <p>Low Stock Items</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ out_of_stock }}</h4>
+                        <p>Out of Stock</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-times-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Recent Transactions</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Type</th>
+                                <th>Quantity</th>
+                                <th>Stock Change</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in recent_transactions %}
+                            <tr>
+                                <td>{{ transaction.product_name }}</td>
+                                <td>
+                                    <span class="badge {% if transaction.transaction_type == 'sale' %}bg-success{% else %}bg-info{% endif %}">
+                                        {{ transaction.transaction_type }}
+                                    </span>
+                                </td>
+                                <td>{{ transaction.quantity }}</td>
+                                <td>{{ transaction.previous_stock }} → {{ transaction.new_stock }}</td>
+                                <td>{{ transaction.timestamp }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('visual_search') }}" class="btn btn-primary">
+                        <i class="fas fa-camera me-2"></i>Visual Search
+                    </a>
+                    <a href="{{ url_for('voice_control') }}" class="btn btn-success">
+                        <i class="fas fa-microphone me-2"></i>Voice Control
+                    </a>
+                    <a href="{{ url_for('products') }}" class="btn btn-info">
+                        <i class="fas fa-plus me-2"></i>Add Product
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">System Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <span class="badge bg-success">Visual Module</span>
+                    <small class="text-muted d-block">Ready for detection</small>
+                </div>
+                <div class="mb-3">
+                    <span class="badge bg-success">Voice Module</span>
+                    <small class="text-muted d-block">Listening for commands</small>
+                </div>
+                <div class="mb-3">
+                    <span class="badge bg-success">Database</span>
+                    <small class="text-muted d-block">Connected and synchronized</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
